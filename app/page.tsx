@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs"
 import { AIAdvisorPanel } from "./components/ai-advisor/AIAdvisorPanel"
 import { TemplateSelector } from "./components/templates/TemplateSelector"
-import { Editor as DocumentEditor } from "./components/document-editor/Editor"
+import { Editor } from "./components/document-editor/Editor"
 import type { Advisor, Template } from "./types"
 
 export default function Home() {
@@ -48,9 +48,9 @@ export default function Home() {
       
       <TabsContent value="document">
         {selectedTemplate ? (
-          <DocumentEditor 
+          <Editor 
             template={selectedTemplate}
-            advisor={selectedAdvisor}
+            advisor={selectedAdvisor?.name}
             onReset={handleReset}
           />
         ) : (

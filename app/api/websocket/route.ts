@@ -1,21 +1,20 @@
 import { WebSocketServer } from 'ws';
+import { WebSocket } from 'ws';
 
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
+// Add this type at the top of the file
+interface ExtendedRequest extends Request {
+  socket: any;
+}
 
-export default function handler(req: any, res: any) {
-  if (res.socket.server.ws) {
+export const GET = (req: ExtendedRequest) => {
+  if (req.socket.server.ws) {
     console.log('WebSocket server already exists');
-    res.end();
-    return;
+    return new Response(null);
   }
 
   console.log('Creating new WebSocket server');
-  const wss = new WebSocketServer({ server: res.socket.server });
-  res.socket.server.ws = wss;
+  const wss = new WebSocketServer({ server: req.socket.server });
+  req.socket.server.ws = wss;
 
   wss.on('connection', async (ws) => {
     console.log('New WebSocket connection established with frontend');
@@ -53,7 +52,7 @@ export default function handler(req: any, res: any) {
 
         // Handle responses from Python backend
         backendWs.onmessage = (event) => {
-          const response = JSON.parse(event.data);
+          const response = JSON.parse(event.data.toString());
           console.log('Received response from backend:', response);
           
           if (response.status === 'error') {
@@ -88,7 +87,7 @@ export default function handler(req: any, res: any) {
     });
   });
 
-  res.end();
+  return new Response(null);
 }
 
 type SectionId = 'executive-summary' | 'company-overview' | 'market-opportunity' | 'financial-analysis' | 'investment-highlights';
