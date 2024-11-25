@@ -1,0 +1,9 @@
+{
+    "version": 2,
+    "functions": {
+      "api/websocket/route.ts": {
+        "memory": 1024,
+        "maxDuration": 60
+      }
+    }
+  }

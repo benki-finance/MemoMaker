@@ -4,18 +4,30 @@ import { Button } from "../ui/button"
 import { Card, CardContent } from "../ui/card"
 import type { Advisor } from "../../types"
 
-const advisors: Advisor[] = [
+export const advisors: Advisor[] = [
   {
-    id: "financial",
-    name: "Financial Analyst",
-    description: "Expert in financial modeling and valuation",
-    icon: "💼"
+    id: "finance",
+    name: "Financial Analyst AI",
+    description: "Specialized in financial modeling, DCF analysis, and comparable company analysis.",
+    icon: "📊"
+  },
+  {
+    id: "mergers",
+    name: "M&A Advisor AI",
+    description: "Expert in deal structuring, due diligence, and transaction analysis.",
+    icon: "🤝"
   },
   {
     id: "strategy",
-    name: "Strategy Consultant",
-    description: "Specialist in market analysis and business strategy",
-    icon: "🎯"
+    name: "Market Strategist AI",
+    description: "Focused on market trends, sector analysis, and investment strategies.",
+    icon: "📈"
+  },
+  {
+    id: "ipo",
+    name: "IPO Specialist AI",
+    description: "Specialized in IPO preparation, pricing, and execution strategy.",
+    icon: "🚀"
   }
 ]
 
@@ -25,23 +37,27 @@ interface AIAdvisorPanelProps {
 
 export function AIAdvisorPanel({ onSelect }: AIAdvisorPanelProps) {
   return (
-    <div className="max-w-6xl mx-auto py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-2">Choose an AI Advisor</h1>
-      <p className="text-gray-600 mb-8">Select an expert to help guide your document creation</p>
+    <div className="p-6 bg-slate-50 h-full">
+      <h2 className="text-2xl font-bold text-gray-900 mb-4">AI Advisors Panel</h2>
+      <p className="text-gray-600 mb-6">
+        Select an advisor to review and provide feedback on your CIM sections
+      </p>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="space-y-4">
         {advisors.map((advisor) => (
-          <Card key={advisor.id} className="hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
-              <div className="text-4xl mb-4">{advisor.icon}</div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">{advisor.name}</h3>
-              <p className="text-gray-600 mb-6">{advisor.description}</p>
-              <Button 
-                onClick={() => onSelect(advisor)}
-                className="w-full"
-              >
-                Select {advisor.name}
-              </Button>
+          <Card 
+            key={advisor.id} 
+            className="hover:shadow-lg transition-shadow cursor-pointer"
+            onClick={() => onSelect(advisor)}
+          >
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3">
+                <div className="text-3xl">{advisor.icon}</div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">{advisor.name}</h3>
+                  <p className="text-sm text-gray-600">{advisor.description}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         ))}
