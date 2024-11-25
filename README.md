@@ -1,6 +1,8 @@
-# Getting Started
+# SAGE: Safe Adaptive Generation for Long Form Documents
 
-Made for Apart x Goodfire Hackathon. Hosted by [Apart Research](https://www.apartresearch.com/project/sage-safe-adaptive-generation-engine-for-long-form-document-generation-in-collaborative-high-stakes-domains)
+## Mechanistic Interpretability for Wall Street
+
+Made for [Apart](https://www.apartresearch.com/) x [Goodfire](https://goodfire.ai/) Hackathon. Read our pre-print working title [draft here](https://www.apartresearch.com/project/sage-safe-adaptive-generation-engine-for-long-form-document-generation-in-collaborative-high-stakes-domains)
 
 Cite us as:
 ```bibtex
@@ -15,8 +17,9 @@ Cite us as:
 }
 ```
 
+## Changelog
 
-NOTE: Anish broke the websocket this morning (11/25/2024) for the Vercel live host, so while it's in the 
+NOTE: Anish broke the websocket this morning (11/25/2024) for the Vercel live host, so while we're testing out Heroku and Railway the [vercel link]( https://benki-memomaker.vercel.app) will be spotty. Will update when patched!
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
