@@ -42,6 +42,18 @@ interface CompanyDetails {
   transactionType: string
 }
 
+interface Template {
+  id: string
+  name: string
+  // ... other properties
+}
+
+interface EditorProps {
+  template?: Template
+  advisor?: string | null
+  onReset?: () => void
+}
+
 const initialSections: Section[] = [
   {
     id: "executive-summary",
@@ -80,7 +92,7 @@ const initialSections: Section[] = [
   }
 ]
 
-export function Editor() {
+export function Editor({ template, advisor, onReset }: EditorProps = {}) {
   // State management
   const [sections, setSections] = useState<Section[]>(initialSections)
   const [showFeedback, setShowFeedback] = useState(false)

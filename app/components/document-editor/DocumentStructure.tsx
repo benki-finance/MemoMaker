@@ -1,4 +1,4 @@
-import { DOCUMENT_TEMPLATES } from '@/lib/constants';
+import { DOCUMENT_TEMPLATES } from '../../lib/constants';
 
 interface DocumentStructureProps {
   templateType: string;
