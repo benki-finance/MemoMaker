@@ -1,3 +1,23 @@
+# Getting Started
+
+Made for Apart x Goodfire Hackathon. Hosted by [Apart Research](https://www.apartresearch.com/project/sage-safe-adaptive-generation-engine-for-long-form-document-generation-in-collaborative-high-stakes-domains)
+
+Cite us as:
+```bibtex
+@misc {
+   title={SAGE: Safe, Adaptive Generation Engine for Long Form Document Generation in Collaborative, High Stakes Domains},
+   author={Rahman, Abrar and Sundar, Anish},
+   year={2024},
+   organization={Apart Research},
+   note={Research submission to the Reprogramming AI Models Hackathon research sprint hosted by Apart.},
+   month={November},
+   howpublished={https://apartresearch.com}
+}
+```
+
+
+NOTE: Anish broke the websocket this morning (11/25/2024) for the Vercel live host, so while it's in the 
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
