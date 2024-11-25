@@ -1,12 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "../ui/button"
 import { Slider } from "../ui/slider"
-import { Clock, ChevronDown, ChevronRight, X } from "lucide-react"
+import { Clock, ChevronDown, ChevronRight, X, Loader2, MessageSquare } from "lucide-react"
 import { VersionHistoryModal } from "../VersionHistoryModal"
 import { toast } from "sonner"
+import { useWebSocket } from "../../contexts/WebSocketContext"
+import { SECTORS, TRANSACTION_TYPES } from "../../config/constants"
+import { AIFeedbackPanel } from './AIFeedbackPanel'
 
 interface Section {
   id: string
@@ -33,93 +36,68 @@ interface Section {
   isExpanded: boolean
 }
 
-interface Template {
-  id: string
-  name: string
-  description: string
-  icon: string
+interface CompanyDetails {
+  companyName: string
+  sector: string
+  transactionType: string
 }
-
-interface Advisor {
-  id: string
-  name: string
-  description: string
-  icon: string
-}
-
-const advisors = [
-  {
-    id: "investment-banker",
-    name: "Senior Investment Banker",
-    description: "20+ years experience in M&A deals and strategic transactions",
-    icon: "👨‍💼"
-  },
-  {
-    id: "pe-md",
-    name: "Private Equity MD",
-    description: "Former Blackstone MD with deep operational expertise",
-    icon: "🏢"
-  },
-  {
-    id: "analyst",
-    name: "Financial Analyst",
-    description: "Expert in financial modeling and valuation analysis",
-    icon: "📊"
-  }
-]
 
 const initialSections: Section[] = [
   {
     id: "executive-summary",
     title: "Executive Summary",
-    content: "Provide a compelling overview of the investment opportunity...",
+    content: "",
     versions: [],
     isExpanded: true
   },
   {
     id: "company-overview",
     title: "Company Overview",
-    content: "Detail the company's history, business model, and key strengths...",
+    content: "",
     versions: [],
     isExpanded: false
   },
   {
     id: "market-opportunity",
     title: "Market Opportunity",
-    content: "Analyze the market size, growth trends, and competitive landscape...",
+    content: "",
     versions: [],
     isExpanded: false
   },
   {
     id: "financial-analysis",
     title: "Financial Analysis",
-    content: "Present key financial metrics, projections, and growth drivers...",
+    content: "",
     versions: [],
     isExpanded: false
   },
   {
     id: "investment-highlights",
     title: "Investment Highlights",
-    content: "Highlight key value drivers and growth opportunities...",
+    content: "",
     versions: [],
     isExpanded: false
   }
 ]
 
-interface EditorProps {
-  template?: Template
-  advisor?: Advisor
-  companyName?: string
-}
-
-export function Editor({ template, advisor, companyName = "Company Name" }: EditorProps) {
+export function Editor() {
+  // State management
   const [sections, setSections] = useState<Section[]>(initialSections)
   const [showFeedback, setShowFeedback] = useState(false)
   const [selectedSection, setSelectedSection] = useState<string | null>(null)
   const [showVersionDialog, setShowVersionDialog] = useState(false)
   const [selectedAdvisor, setSelectedAdvisor] = useState<string | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [streamingSections, setStreamingSections] = useState<Set<string>>(new Set())
+  const [generationProgress, setGenerationProgress] = useState<Record<string, number>>({})
+  const { ws, isConnected } = useWebSocket()
   
+  const [companyDetails, setCompanyDetails] = useState<CompanyDetails>({
+    companyName: "",
+    sector: SECTORS[0],
+    transactionType: TRANSACTION_TYPES[0]
+  })
+
   const [settings, setSettings] = useState({
     technicalDepth: 50,
     creativity: 50,
@@ -128,366 +106,470 @@ export function Editor({ template, advisor, companyName = "Company Name" }: Edit
     riskFraming: 50
   })
 
-  // Create version history data structure
-  const versionHistory = sections.reduce((acc, section) => {
-    acc[section.id] = section.versions.map(v => ({
-      id: v.id,
-      timestamp: v.timestamp.getTime(),
-      content: v.content,
-      changes: [{ type: 'unchanged' as const, content: v.content, color: 'text-black' }],
-      stats: {
-        additions: 1,
-        deletions: 0,
-        sectionsAffected: 1,
-        recommendedChanges: 0
-      }
-    }))
-    return acc
-  }, {} as any)
+  const [feedbackSection, setFeedbackSection] = useState<Section | null>(null);
 
-    // ... existing imports ...
+  useEffect(() => {
+    console.log('WebSocket status:', { isConnected, ws });
+  }, [isConnected, ws]); 
 
-    const generateFeedback = async () => {
-      if (!selectedSection || !selectedAdvisor) return
+  // WebSocket message handler
+  useEffect(() => {
+    if (!ws) return;
+
+    const handleMessage = (event: MessageEvent) => {
+      const data = JSON.parse(event.data);
       
-      setIsGenerating(true)
-      try {
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        const advisor = advisors.find(a => a.id === selectedAdvisor)
-        const currentSection = sections.find(s => s.id === selectedSection)
-        const previousContent = currentSection?.content || ""
-        const newContent = `Enhanced version with ${settings.technicalDepth}% technical depth, ${settings.creativity}% creativity, and ${settings.length}% length adjustment. Generated by ${advisor?.name}.`
-        
-        // Calculate changes between versions
-        const changes = calculateChanges(previousContent, newContent).map(change => ({
-          ...change,
-          color: change.type === 'addition' 
-            ? 'bg-green-100' 
-            : change.type === 'deletion' 
-            ? 'bg-red-100' 
-            : 'transparent',
-          advisor: advisor?.name
-        }))
-        
-        // Calculate stats
-        const stats = {
-          additions: changes.filter(c => c.type === 'addition').length,
-          deletions: changes.filter(c => c.type === 'deletion').length,
-          sectionsAffected: 1,
-          recommendedChanges: changes.length
-        }
-        
-        const newVersion = {
-          id: Date.now().toString(),
-          timestamp: new Date().getTime(),
-          content: newContent,
-          changes: changes,
-          stats: stats
-        }
-        
-        setSections(sections.map(section => 
-          section.id === selectedSection
+      if (data.type === 'token') {
+        setSections(sections => sections.map(section => 
+          section.id === data.sectionId
+            ? { ...section, content: section.content + data.content }
+            : section
+        ));
+
+        setGenerationProgress(prev => ({
+          ...prev,
+          [data.sectionId]: (prev[data.sectionId] || 0) + 1
+        }));
+      } 
+      else if (data.type === 'done') {
+        setSections(sections => sections.map(section => 
+          section.id === data.sectionId
             ? {
                 ...section,
-                versions: [{
-                  id: newVersion.id,
-                  content: newContent,
-                  timestamp: new Date(newVersion.timestamp),
-                  advisor: advisor?.name,
-                  changes: newVersion.changes,
-                  stats: newVersion.stats
-                }, ...section.versions],
-                content: newContent
+                versions: [
+                  {
+                    id: Date.now().toString(),
+                    content: section.content,
+                    timestamp: new Date(),
+                    changes: [],
+                    stats: {
+                      additions: 1,
+                      deletions: 0,
+                      sectionsAffected: 1,
+                      recommendedChanges: 0
+                    }
+                  },
+                  ...section.versions
+                ]
               }
             : section
-        ))
+        ));
+
+        setStreamingSections(current => {
+          const updated = new Set(current);
+          updated.delete(data.sectionId);
+          return updated;
+        });
         
-        toast.success("Feedback generated successfully!")
-      } catch (error) {
-        toast.error("Failed to generate feedback")
-      } finally {
-        setIsGenerating(false)
+        setGenerationProgress(prev => {
+          const updated = { ...prev };
+          delete updated[data.sectionId];
+          return updated;
+        });
+
+        if (streamingSections.size === 1) {
+          setIsGenerating(false);
+          toast.success("CIM generation completed!");
+        }
+
+        toast.success(`Generated ${sections.find(s => s.id === data.sectionId)?.title}`);
+      } 
+      else if (data.type === 'error') {
+        toast.error(data.message);
+        setStreamingSections(new Set());
+        setGenerationProgress({});
+        setIsGenerating(false);
+      }
+    };
+
+    ws.addEventListener('message', handleMessage);
+    return () => ws.removeEventListener('message', handleMessage);
+  }, [ws, streamingSections.size]);
+
+  // Add right after the WebSocket context import (around line 10-11)
+const generateAllSections = async () => {
+  console.log('Generate button clicked', {
+    wsStatus: !!ws,
+    isConnected,
+    companyDetails
+  });
+
+  if (!ws || !isConnected) {
+    toast.error("WebSocket connection not available");
+    return;
+  }
+
+  if (!companyDetails.companyName || !companyDetails.sector || !companyDetails.transactionType) {
+    toast.error("Please fill in all company details first");
+    return;
+  }
+
+  setIsGenerating(true);
+  
+  // Clear existing content and expand all sections
+  setSections(sections.map(section => ({
+    ...section,
+    content: '',
+    isExpanded: true
+  })));
+
+  // Start streaming for each section
+  sections.forEach(section => {
+    setStreamingSections(current => new Set([...current, section.id]));
+    const message = {
+      type: 'generate', // Add this line
+      companyDetails,
+      sectionId: section.id
+    };
+    console.log('Sending message:', message);
+    ws.send(JSON.stringify(message));
+  });
+
+  toast.success("Starting CIM generation...");
+};
+
+  const updateSectionContent = (sectionId: string, newContent: string, advisor?: string) => {
+    setSections(sections.map(section =>
+      section.id === sectionId
+        ? {
+            ...section,
+            content: newContent,
+            versions: [
+              {
+                id: Date.now().toString(),
+                content: newContent,
+                timestamp: new Date(),
+                advisor: advisor,
+                changes: calculateChanges(section.content, newContent),
+                stats: {
+                  additions: countAdditions(section.content, newContent),
+                  deletions: countDeletions(section.content, newContent),
+                  sectionsAffected: 1,
+                  recommendedChanges: 0
+                }
+              },
+              ...section.versions
+            ]
+          }
+        : section
+    ));
+  };
+
+  const calculateChanges = (oldContent: string, newContent: string) => {
+    const changes: Array<{
+      type: 'addition' | 'deletion' | 'unchanged'
+      content: string
+      color: string
+      advisor?: string
+    }> = [];
+    const oldWords = oldContent.split(' ');
+    const newWords = newContent.split(' ');
+    
+    let i = 0, j = 0;
+    while (i < oldWords.length || j < newWords.length) {
+      if (i >= oldWords.length) {
+        changes.push({
+          type: 'addition',
+          content: newWords[j],
+          color: 'green'
+        });
+        j++;
+      } else if (j >= newWords.length) {
+        changes.push({
+          type: 'deletion',
+          content: oldWords[i],
+          color: 'red'
+        });
+        i++;
+      } else if (oldWords[i] !== newWords[j]) {
+        changes.push({
+          type: 'deletion',
+          content: oldWords[i],
+          color: 'red'
+        });
+        changes.push({
+          type: 'addition',
+          content: newWords[j],
+          color: 'green'
+        });
+        i++;
+        j++;
+      } else {
+        changes.push({
+          type: 'unchanged',
+          content: oldWords[i],
+          color: 'gray'
+        });
+        i++;
+        j++;
       }
     }
+    return changes;
+  };
 
-// Add this helper function
-function calculateChanges(oldText: string, newText: string) {
-  const oldWords = oldText.split(/\s+/)
-  const newWords = newText.split(/\s+/)
-  const changes: Array<{ type: 'addition' | 'deletion' | 'unchanged', content: string }> = []
-  
-  let i = 0, j = 0
-  while (i < oldWords.length || j < newWords.length) {
-    if (i >= oldWords.length) {
-      // Remaining words in new text are additions
-      changes.push({ type: 'addition', content: newWords[j] })
-      j++
-    } else if (j >= newWords.length) {
-      // Remaining words in old text are deletions
-      changes.push({ type: 'deletion', content: oldWords[i] })
-      i++
-    } else if (oldWords[i] === newWords[j]) {
-      // Words are the same
-      changes.push({ type: 'unchanged', content: oldWords[i] })
-      i++
-      j++
-    } else {
-      // Words are different
-      changes.push({ type: 'deletion', content: oldWords[i] })
-      changes.push({ type: 'addition', content: newWords[j] })
-      i++
-      j++
-    }
-  }
+  const countAdditions = (oldContent: string, newContent: string) => {
+    const oldWords = oldContent.trim().split(/\s+/);
+    const newWords = newContent.trim().split(/\s+/);
+    
+    return newWords.filter(word => !oldWords.includes(word)).length;
+  };
 
-    return changes
-  }
+  const countDeletions = (oldContent: string, newContent: string) => {
+    const oldWords = oldContent.trim().split(/\s+/);
+    const newWords = newContent.trim().split(/\s+/);
+    
+    return oldWords.filter(word => !newWords.includes(word)).length;
+  };
 
-  return (
-    <div className="flex h-screen bg-white">
-      {/* Main Content */}
-      <div className="flex-1 overflow-auto">
-        <div className="border-b p-4 bg-white sticky top-0 z-10 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">{companyName} - CIM</h1>
-            <p className="text-sm text-gray-500">Last updated: {new Date().toLocaleDateString()}</p>
-          </div>
-          <Button 
-            variant="outline"
-            onClick={() => setShowFeedback(false)}
-          >
-            Save Draft
-          </Button>
-        </div>
+    // Continue from previous part...
 
-        <div className="p-6 space-y-4">
-          <AnimatePresence>
-            {sections.map((section) => (
-              <motion.div
-                key={section.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="border rounded-lg shadow-sm"
-              >
-                <div 
-                  className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                  onClick={() => {
-                    setSections(sections.map(s => 
-                      s.id === section.id ? {...s, isExpanded: !s.isExpanded} : s
-                    ))
-                  }}
-                >
-                  <div className="flex items-center">
-                    {section.isExpanded ? 
-                      <ChevronDown className="w-5 h-5 text-gray-500" /> : 
-                      <ChevronRight className="w-5 h-5 text-gray-500" />
-                    }
-                    <h2 className="text-lg font-medium ml-2">{section.title}</h2>
-                    {section.versions.length > 0 && (
-                      <span className="ml-2 text-sm text-gray-500">
-                        ({section.versions.length} revision{section.versions.length !== 1 ? 's' : ''})
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setSelectedSection(section.id)
-                        setShowFeedback(true)
-                      }}
-                    >
-                      Get AI Feedback
-                    </Button>
-                    {section.versions.length > 0 && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setSelectedSection(section.id)
-                          setShowVersionDialog(true)
-                        }}
-                      >
-                        <Clock className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                
-                <AnimatePresence>
-                  {section.isExpanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="p-4 border-t">
-                        <textarea
-                          className="w-full min-h-[200px] p-3 rounded-md border focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
-                          value={section.content}
-                          onChange={(e) => {
-                            setSections(sections.map(s =>
-                              s.id === section.id ? {...s, content: e.target.value} : s
-                            ))
-                          }}
-                          placeholder={`Enter ${section.title.toLowerCase()}...`}
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-      </div>
-
-      {/* AI Feedback Panel */}
-      <AnimatePresence>
-        {showFeedback && (
-          <motion.div
-            initial={{ x: 400 }}
-            animate={{ x: 0 }}
-            exit={{ x: 400 }}
-            transition={{ type: "spring", damping: 30 }}
-            className="w-96 border-l bg-gray-50"
-          >
-            <div className="p-4 border-b bg-white flex justify-between items-center">
-              <h3 className="text-lg font-medium">AI Feedback Configuration</h3>
-              <Button
-                variant="ghost"
-                size="sm"
+    return (
+      <div className="flex h-screen">
+        <div className="flex-1 overflow-auto">
+          {/* Header and Company Details Form */}
+          <div className="border-b p-4 bg-white sticky top-0 z-10 space-y-4">
+            <div className="flex justify-between items-center">
+              <h1 className="text-2xl font-semibold text-gray-900">Confidential Information Memorandum</h1>
+              <Button 
+                variant="outline"
                 onClick={() => setShowFeedback(false)}
               >
-                <X className="w-4 h-4" />
+                Save Draft
               </Button>
             </div>
-
-            <div className="p-4 space-y-6">
+            
+            {/* Company Details Form */}
+            <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Select Advisor</label>
-                <div className="space-y-2">
-                  {advisors.map((advisor) => (
-                    <div
-                      key={advisor.id}
-                      className={`flex items-center p-3 rounded-lg border bg-white cursor-pointer hover:border-green-500 ${
-                        selectedAdvisor === advisor.id ? 'border-green-500 ring-2 ring-green-200' : ''
-                      }`}
-                      onClick={() => setSelectedAdvisor(advisor.id)}
-                    >
-                      <div className="text-2xl mr-3">{advisor.icon}</div>
-                      <div>
-                        <div className="font-medium">{advisor.name}</div>
-                        <div className="text-sm text-gray-600">{advisor.description}</div>
-                      </div>
-                    </div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Company Name
+                </label>
+                <input
+                  type="text"
+                  value={companyDetails.companyName}
+                  onChange={(e) => setCompanyDetails(prev => ({
+                    ...prev,
+                    companyName: e.target.value
+                  }))}
+                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Enter company name..."
+                />
+              </div>
+  
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Industry / Sector
+                </label>
+                <select
+                  value={companyDetails.sector}
+                  onChange={(e) => setCompanyDetails(prev => ({
+                    ...prev,
+                    sector: e.target.value
+                  }))}
+                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  {SECTORS.map((sector) => (
+                    <option key={sector} value={sector}>
+                      {sector}
+                    </option>
                   ))}
-                </div>
+                </select>
               </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Technical Depth
-                    <span className="float-right text-gray-500">{settings.technicalDepth}%</span>
-                  </label>
-                  <Slider 
-                    value={[settings.technicalDepth]}
-                    onValueChange={([value]) => setSettings({...settings, technicalDepth: value})}
-                    max={100} 
-                    step={1} 
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Creativity Level
-                    <span className="float-right text-gray-500">{settings.creativity}%</span>
-                  </label>
-                  <Slider 
-                    value={[settings.creativity]}
-                    onValueChange={([value]) => setSettings({...settings, creativity: value})}
-                    max={100} 
-                    step={1} 
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Length
-                    <span className="float-right text-gray-500">{settings.length}%</span>
-                  </label>
-                  <Slider 
-                    value={[settings.length]}
-                    onValueChange={([value]) => setSettings({...settings, length: value})}
-                    max={100} 
-                    step={1} 
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Financial Jargon
-                    <span className="float-right text-gray-500">{settings.financialJargon}%</span>
-                  </label>
-                  <Slider 
-                    value={[settings.financialJargon]}
-                    onValueChange={([value]) => setSettings({...settings, financialJargon: value})}
-                    max={100} 
-                    step={1} 
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Risk Framing
-                    <span className="float-right text-gray-500">{settings.riskFraming}%</span>
-                  </label>
-                  <Slider 
-                    value={[settings.riskFraming]}
-                    onValueChange={([value]) => setSettings({...settings, riskFraming: value})}
-                    max={100} 
-                    step={1} 
-                  />
-                </div>
+  
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Transaction Type
+                </label>
+                <select
+                  value={companyDetails.transactionType}
+                  onChange={(e) => setCompanyDetails(prev => ({
+                    ...prev,
+                    transactionType: e.target.value
+                  }))}
+                  className="w-full p-2 border rounded-md focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  {TRANSACTION_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
               </div>
-
-              <Button 
-                className="w-full bg-green-600 hover:bg-green-700 text-white"
-                onClick={generateFeedback}
-                disabled={isGenerating || !selectedAdvisor}
-              >
-                {isGenerating ? "Generating..." : "Generate Feedback"}
-              </Button>
             </div>
-          </motion.div>
+  
+            {/* Generate Button */}
+            <div className="flex justify-center">
+            <Button
+              className={`w-1/3 ${
+                isGenerating 
+                  ? 'bg-gray-400'
+                  : 'bg-green-600 hover:bg-green-700'
+              } text-white font-semibold py-3 rounded-lg transition-colors`}
+              onClick={() => {
+                console.log('Button clicked', {
+                  isGenerating,
+                  isConnected,
+                  companyName: companyDetails.companyName
+                });
+                generateAllSections();
+              }}
+              disabled={isGenerating || !isConnected || !companyDetails.companyName.trim()}
+            >
+              {isGenerating ? (
+                <div className="flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  Generating CIM...
+                </div>
+              ) : (
+                'Generate CIM'
+              )}
+            </Button>
+            </div>
+          </div>
+  
+          {/* Sections */}
+          <div className="p-6 space-y-4">
+            <AnimatePresence>
+              {sections.map((section) => (
+                <motion.div
+                  key={section.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="border rounded-lg shadow-sm"
+                >
+                  <div 
+                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => {
+                      setSections(sections.map(s => 
+                        s.id === section.id ? {...s, isExpanded: !s.isExpanded} : s
+                      ))
+                    }}
+                  >
+                    <div className="flex items-center">
+                      {section.isExpanded ? 
+                        <ChevronDown className="w-5 h-5 text-gray-500" /> : 
+                        <ChevronRight className="w-5 h-5 text-gray-500" />
+                      }
+                      <h2 className="text-lg font-medium ml-2">
+                        {section.title}
+                        {streamingSections.has(section.id) && (
+                          <span className="ml-2 text-sm text-green-600 flex items-center">
+                            <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                            Generating...
+                          </span>
+                        )}
+                      </h2>
+                    </div>
+                    
+                    <div className="flex items-center space-x-2">
+                      {section.content && !streamingSections.has(section.id) && (
+                        <>
+                          <Button
+                            className="border-2 border-blue-500 bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateSectionContent(section.id, section.content);
+                              toast.success("Version saved successfully");
+                            }}
+                          >
+                        
+                            Save Version
+                          </Button>
+                          <Button
+                            className="border-2 border-purple-500 bg-purple-50 hover:bg-purple-100 text-purple-700 font-medium"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFeedbackSection(section);
+                            }}
+                          >
+                            <MessageSquare className="h-4 w-4 mr-1" />
+                            Get Feedback
+                          </Button>
+                        </>
+                      )}
+                      {section.versions.length > 0 && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setSelectedSection(section.id)
+                            setShowVersionDialog(true)
+                          }}
+                        >
+                          <Clock className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <AnimatePresence>
+                    {section.isExpanded && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <div className="p-4 border-t">
+                          <textarea
+                            className="w-full min-h-[200px] p-3 rounded-md border focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                            value={section.content}
+                            onChange={(e) => {
+                              setSections(sections.map(s =>
+                                s.id === section.id ? {...s, content: e.target.value} : s
+                              ))
+                            }}
+                            placeholder={`Enter ${section.title.toLowerCase()}...`}
+                            disabled={streamingSections.has(section.id)}
+                          />
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
+        </div>
+  
+        {/* Version History Modal */}
+        {selectedSection && (
+          <VersionHistoryModal
+            showVersionDialog={showVersionDialog}
+            setShowVersionDialog={setShowVersionDialog}
+            activeSection={selectedSection}
+            versionHistory={sections.reduce((acc, section) => ({
+              ...acc,
+              [section.id]: section.versions
+            }), {})}
+            onRevert={(content) => {
+              setSections(sections.map(section =>
+                section.id === selectedSection
+                  ? { ...section, content }
+                  : section
+              ))
+              setShowVersionDialog(false)
+            }}
+          />
         )}
-      </AnimatePresence>
-
-      {/* Version History Modal */}
-      {selectedSection && (
-        <VersionHistoryModal
-          showVersionDialog={showVersionDialog}
-          setShowVersionDialog={setShowVersionDialog}
-          activeSection={selectedSection}
-          versionHistory={versionHistory}
-          onRevert={(content) => {
-            setSections(sections.map(section =>
-              section.id === selectedSection
-                ? { ...section, content }
-                : section
-            ))
-            setShowVersionDialog(false)
-          }}
-        />
-      )}
-    </div>
-  )
-}
+        
+        {feedbackSection && (
+          <div className="w-96 border-l h-screen overflow-auto">
+            <AIFeedbackPanel
+              content={feedbackSection.content}
+              sectionId={feedbackSection.id}
+              onClose={() => setFeedbackSection(null)}
+              onContentUpdate={(newContent) => {
+                updateSectionContent(feedbackSection.id, newContent, selectedAdvisor || undefined);
+              }}
+            />
+          </div>
+        )}
+      </div>
+    )
+  }

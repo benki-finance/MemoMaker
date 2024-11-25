@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "sonner";
+import { WebSocketProvider } from './contexts/WebSocketContext';
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -22,14 +23,15 @@ export const metadata: Metadata = {
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en">
       <body>
-        {children}
-        <Toaster position="top-center" />
+        <WebSocketProvider>
+          {children}
+        </WebSocketProvider>
       </body>
     </html>
-  )
+  );
 }
